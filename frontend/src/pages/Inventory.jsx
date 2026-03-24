@@ -24,7 +24,7 @@ function EmployeeSelect({ value, onChange }) {
   );
 }
 
-// Compress image to JPEG base64, max 600px wide, ~80KB
+// Compress image to JPEG base64 with aggressive size cap for faster API requests
 function compressImage(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -33,13 +33,34 @@ function compressImage(file) {
       const img = new Image();
       img.onerror = reject;
       img.onload = () => {
-        const MAX = 600;
-        const ratio = Math.min(1, MAX / Math.max(img.width, img.height));
+        const MAX_DIMENSION = 500;
+        const TARGET_BYTES = 160 * 1024;
+        const MIN_QUALITY = 0.45;
+
+        const ratio = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(img.width * ratio);
         canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.75));
+        const context = canvas.getContext('2d');
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        let quality = 0.75;
+        let output = canvas.toDataURL('image/jpeg', quality);
+
+        while (output.length > TARGET_BYTES * 1.37 && quality > MIN_QUALITY) {
+          quality -= 0.1;
+          output = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        if (output.length > TARGET_BYTES * 1.37) {
+          const downscaled = document.createElement('canvas');
+          downscaled.width = Math.max(180, Math.round(canvas.width * 0.8));
+          downscaled.height = Math.max(180, Math.round(canvas.height * 0.8));
+          downscaled.getContext('2d').drawImage(canvas, 0, 0, downscaled.width, downscaled.height);
+          output = downscaled.toDataURL('image/jpeg', Math.max(MIN_QUALITY, quality));
+        }
+
+        resolve(output);
       };
       img.src = e.target.result;
     };

@@ -3,10 +3,11 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 10000,
+  timeout: 30000,
 });
 
-const INVENTORY_WRITE_TIMEOUT = 30000;
+const INVENTORY_READ_TIMEOUT = 60000;
+const INVENTORY_WRITE_TIMEOUT = 60000;
 
 // Attach current user to every request
 api.interceptors.request.use((config) => {
@@ -19,7 +20,7 @@ api.interceptors.response.use(
   (res) => res.data,
   (err) => {
     if (err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
-      return Promise.reject(new Error('Request timed out. Try again, or use a smaller image.'));
+      return Promise.reject(new Error('Request timed out. Please try again.'));
     }
     let msg = err.response?.data?.error;
     if (msg && typeof msg !== 'string') msg = msg.message || JSON.stringify(msg);
@@ -30,7 +31,7 @@ api.interceptors.response.use(
 
 // ── Items ─────────────────────────────────────────
 export const itemsApi = {
-  list:       (params) => api.get('/items', { params }),
+  list:       (params) => api.get('/items', { params, timeout: INVENTORY_READ_TIMEOUT }),
   get:        (id)     => api.get(`/items/${id}`),
   create:     (data)   => api.post('/items', data, { timeout: INVENTORY_WRITE_TIMEOUT }),
   update:     (id, d)  => api.patch(`/items/${id}`, d, { timeout: INVENTORY_WRITE_TIMEOUT }),
@@ -40,7 +41,7 @@ export const itemsApi = {
 
 // ── Sales ─────────────────────────────────────────
 export const salesApi = {
-  list:   (params) => api.get('/sales', { params }),
+  list:   (params) => api.get('/sales', { params, timeout: INVENTORY_READ_TIMEOUT }),
   get:    (id)     => api.get(`/sales/${id}`),
   create: (data)   => api.post('/sales', data),
   update: (id, d)  => api.patch(`/sales/${id}`, d),
