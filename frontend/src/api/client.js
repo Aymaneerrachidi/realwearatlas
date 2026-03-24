@@ -20,7 +20,7 @@ api.interceptors.response.use(
   (res) => res.data,
   (err) => {
     if (err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
-      return Promise.reject(new Error('Request timed out. Please try again.'));
+      return Promise.reject(new Error('Request timed out. Please refresh and check if it saved, then try again.'));
     }
     let msg = err.response?.data?.error;
     if (msg && typeof msg !== 'string') msg = msg.message || JSON.stringify(msg);

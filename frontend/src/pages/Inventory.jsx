@@ -317,28 +317,53 @@ export default function Inventory() {
     finally { setLoading(false); }
   }, [search, statusFilter, categoryFilter, sortBy, sortOrder]);
 
+  const refreshSilent = useCallback(async () => {
+    try {
+      const res = await itemsApi.list({ status: statusFilter || undefined, category: categoryFilter || undefined, search: search || undefined, sort: sortBy, order: sortOrder });
+      setItems(res.data);
+    } catch {}
+  }, [search, statusFilter, categoryFilter, sortBy, sortOrder]);
+
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
   const handleSave = async (data) => {
     setSaving(true);
     try {
-      if (selected?.id) { await itemsApi.update(selected.id, data); toast('Item updated'); }
-      else              { await itemsApi.create(data); toast('Item added!'); }
-      setModal(null); setSelected(null); load();
+      if (selected?.id) {
+        const updated = await itemsApi.update(selected.id, data);
+        setItems(prev => prev.map(item => item.id === updated.id ? updated : item));
+        toast('Item updated');
+      } else {
+        const created = await itemsApi.create(data);
+        setItems(prev => [created, ...prev]);
+        toast('Item added!');
+      }
+      setModal(null); setSelected(null); refreshSilent();
     } catch (err) { toast(err.message, 'error'); }
     finally { setSaving(false); }
   };
 
   const handleSell = async (data) => {
     setSaving(true);
-    try { await salesApi.create(data); toast('Marked as sold!'); setModal(null); setSelected(null); load(); }
+    try {
+      await salesApi.create(data);
+      setItems(prev => prev.map(item => item.id === data.item_id ? { ...item, status: 'sold' } : item));
+      toast('Marked as sold!');
+      setModal(null); setSelected(null); refreshSilent();
+    }
     catch (err) { toast(err.message, 'error'); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
     setSaving(true);
-    try { await itemsApi.delete(selected.id); toast('Deleted'); setModal(null); setSelected(null); load(); }
+    try {
+      const deletedId = selected.id;
+      await itemsApi.delete(deletedId);
+      setItems(prev => prev.filter(item => item.id !== deletedId));
+      toast('Deleted');
+      setModal(null); setSelected(null); refreshSilent();
+    }
     catch (err) { toast(err.message, 'error'); }
     finally { setSaving(false); }
   };
