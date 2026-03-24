@@ -2,7 +2,7 @@ const express = require('express');
 const { db } = require('../database/db');
 
 const router = express.Router();
-const errMsg = (err) => err?.message || String(err) || 'Unknown error';
+const errMsg = (err) => { if (!err) return 'Unknown error'; if (typeof err === 'string') return err; if (err.message) return err.message; try { const s = JSON.stringify(err); return (s && s !== '{}') ? s : 'Unknown error'; } catch { return 'Unknown error'; } };
 
 // GET /api/dashboard/stats
 router.get('/stats', async (req, res) => {

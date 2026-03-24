@@ -16,8 +16,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    const message = err.response?.data?.error || err.message || 'Unknown error';
-    return Promise.reject(new Error(message));
+    let msg = err.response?.data?.error;
+    if (msg && typeof msg !== 'string') msg = msg.message || JSON.stringify(msg);
+    msg = msg || err.message || 'Unknown error';
+    return Promise.reject(new Error(String(msg)));
   }
 );
 

@@ -5,7 +5,7 @@ const log = require('../utils/logger');
 
 const router = express.Router();
 const getUser = (req) => req.body?.submitted_by || req.headers['x-user'] || 'Unknown';
-const errMsg = (err) => err?.message || String(err) || 'Unknown error';
+const errMsg = (err) => { if (!err) return 'Unknown error'; if (typeof err === 'string') return err; if (err.message) return err.message; try { const s = JSON.stringify(err); return (s && s !== '{}') ? s : 'Unknown error'; } catch { return 'Unknown error'; } };
 
 // GET /api/items
 router.get('/', async (req, res) => {
