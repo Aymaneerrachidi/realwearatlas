@@ -15,9 +15,26 @@ const api = axios.create({
   timeout: 30000,
 });
 
-const INVENTORY_READ_TIMEOUT = 12000;
-const INVENTORY_WRITE_TIMEOUT = 60000;
-const INVENTORY_DELETE_TIMEOUT = 12000;
+const INVENTORY_READ_TIMEOUT = 20000;
+const INVENTORY_WRITE_TIMEOUT = 90000;
+const INVENTORY_DELETE_TIMEOUT = 30000;
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const isTransientError = (err) => /timed out|cannot reach api|network error|timeout/i.test(err?.message || '');
+
+async function withRetry(requestFactory, retries = 2) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await requestFactory();
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries || !isTransientError(err)) throw err;
+      await wait(500 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
 
 // Attach current user to every request
 api.interceptors.request.use((config) => {
@@ -44,12 +61,12 @@ api.interceptors.response.use(
 
 // ── Items ─────────────────────────────────────────
 export const itemsApi = {
-  list:       (params) => api.get('/items', { params: { limit: 15, page: 1, ...(params || {}) }, timeout: INVENTORY_READ_TIMEOUT }),
+  list:       (params) => withRetry(() => api.get('/items', { params: { limit: 15, page: 1, ...(params || {}) }, timeout: INVENTORY_READ_TIMEOUT })),
   get:        (id)     => api.get(`/items/${id}`),
   create:     (data)   => api.post('/items', data, { timeout: INVENTORY_WRITE_TIMEOUT }),
   update:     (id, d)  => api.patch(`/items/${id}`, d, { timeout: INVENTORY_WRITE_TIMEOUT }),
-  delete:     (id)     => api.delete(`/items/${id}`, { timeout: INVENTORY_DELETE_TIMEOUT }),
-  categories: ()       => api.get('/items/meta/categories'),
+  delete:     (id)     => withRetry(() => api.delete(`/items/${id}`, { timeout: INVENTORY_DELETE_TIMEOUT })),
+  categories: ()       => withRetry(() => api.get('/items/meta/categories', { timeout: INVENTORY_READ_TIMEOUT })),
 };
 
 // ── Sales ─────────────────────────────────────────
