@@ -25,7 +25,15 @@ app.use('/api/expenses',  require('./routes/expenses'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/activity',  require('./routes/activity'));
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', async (req, res) => {
+  try {
+    const { db } = require('./database/db');
+    await db.execute('SELECT 1');
+    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ status: 'error', db: 'failed', error: err.message });
+  }
+});
 
 app.use((req, res) => res.status(404).json({ error: `Route ${req.path} not found` }));
 app.use((err, req, res, next) => {
