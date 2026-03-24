@@ -299,6 +299,7 @@ export default function Inventory() {
   const { user } = useUser();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -308,20 +309,17 @@ export default function Inventory() {
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ background = false } = {}) => {
+    if (background) setBackgroundRefreshing(true);
+    else setLoading(true);
     try {
       const res = await itemsApi.list({ status: statusFilter || undefined, category: categoryFilter || undefined, search: search || undefined, sort: sortBy, order: sortOrder });
       setItems(res.data);
     } catch (err) { toast(err.message, 'error'); }
-    finally { setLoading(false); }
-  }, [search, statusFilter, categoryFilter, sortBy, sortOrder]);
-
-  const refreshSilent = useCallback(async () => {
-    try {
-      const res = await itemsApi.list({ status: statusFilter || undefined, category: categoryFilter || undefined, search: search || undefined, sort: sortBy, order: sortOrder });
-      setItems(res.data);
-    } catch {}
+    finally {
+      if (background) setBackgroundRefreshing(false);
+      else setLoading(false);
+    }
   }, [search, statusFilter, categoryFilter, sortBy, sortOrder]);
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
@@ -338,7 +336,7 @@ export default function Inventory() {
         setItems(prev => [created, ...prev]);
         toast('Item added!');
       }
-      setModal(null); setSelected(null); refreshSilent();
+      setModal(null); setSelected(null); load({ background: true });
     } catch (err) { toast(err.message, 'error'); }
     finally { setSaving(false); }
   };
@@ -349,7 +347,7 @@ export default function Inventory() {
       await salesApi.create(data);
       setItems(prev => prev.map(item => item.id === data.item_id ? { ...item, status: 'sold' } : item));
       toast('Marked as sold!');
-      setModal(null); setSelected(null); refreshSilent();
+      setModal(null); setSelected(null); load({ background: true });
     }
     catch (err) { toast(err.message, 'error'); }
     finally { setSaving(false); }
@@ -362,7 +360,7 @@ export default function Inventory() {
       await itemsApi.delete(deletedId);
       setItems(prev => prev.filter(item => item.id !== deletedId));
       toast('Deleted');
-      setModal(null); setSelected(null); refreshSilent();
+      setModal(null); setSelected(null); load({ background: true });
     }
     catch (err) { toast(err.message, 'error'); }
     finally { setSaving(false); }
@@ -397,6 +395,9 @@ export default function Inventory() {
       />
 
       <div className="p-3 lg:p-5 flex flex-col gap-3 animate-fade-in">
+        {backgroundRefreshing && (
+          <div className="text-xs" style={{ color: 'var(--input-placeholder)' }}>Refreshing…</div>
+        )}
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">

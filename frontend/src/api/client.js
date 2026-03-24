@@ -6,7 +6,7 @@ const api = axios.create({
   timeout: 30000,
 });
 
-const INVENTORY_READ_TIMEOUT = 60000;
+const INVENTORY_READ_TIMEOUT = 12000;
 const INVENTORY_WRITE_TIMEOUT = 60000;
 
 // Attach current user to every request
