@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Tag, ShoppingBag, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Tag, ShoppingBag, Camera, X } from 'lucide-react';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
 import ExportMenu from '../components/ExportMenu';
@@ -20,6 +20,62 @@ function EmployeeSelect({ value, onChange }) {
       <select className="input" value={value} onChange={e => onChange(e.target.value)}>
         {USERS.map(u => <option key={u} value={u}>{u}</option>)}
       </select>
+    </div>
+  );
+}
+
+// Compress image to JPEG base64, max 600px wide, ~80KB
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const MAX = 600;
+        const ratio = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function ImageUpload({ value, onChange }) {
+  const ref = useRef();
+  const handleFile = async (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    try { onChange(await compressImage(file)); } catch {}
+  };
+  return (
+    <div>
+      <label className="label">Photo</label>
+      <div className="relative">
+        {value ? (
+          <div className="relative w-full h-36 rounded-xl overflow-hidden border" style={{ borderColor: 'var(--card-border)' }}>
+            <img src={value} alt="item" className="w-full h-full object-cover" />
+            <button type="button" onClick={() => onChange('')}
+              className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-rose-500/80 transition-colors">
+              <X size={12} />
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => ref.current.click()}
+            className="w-full h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-amber-500/50 hover:bg-amber-500/5"
+            style={{ borderColor: 'var(--card-border)', color: 'var(--input-placeholder)' }}>
+            <Camera size={18} />
+            <span className="text-xs">Tap to upload photo</span>
+          </button>
+        )}
+        <input ref={ref} type="file" accept="image/*" className="hidden"
+          onChange={e => handleFile(e.target.files[0])} />
+      </div>
     </div>
   );
 }
@@ -78,6 +134,7 @@ function ItemForm({ initial, onSave, onCancel, loading, defaultUser }) {
         </div>
         <EmployeeSelect value={form.submitted_by} onChange={v => set('submitted_by', v)} />
       </div>
+      <ImageUpload value={form.image_url || ''} onChange={v => set('image_url', v)} />
       <div>
         <label className="label">Notes</label>
         <textarea className="input resize-none" rows={2} placeholder="Condition, size…"
@@ -169,8 +226,11 @@ function ItemCard({ item, onEdit, onSell, onDelete }) {
     <div className="mobile-card">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400/60 shrink-0">
-            <Tag size={14} />
+          <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border" style={{ borderColor: 'var(--card-border)' }}>
+            {item.image_url
+              ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+              : <div className="w-full h-full bg-amber-500/10 flex items-center justify-center text-amber-400/60"><Tag size={14} /></div>
+            }
           </div>
           <div className="min-w-0">
             <p className="font-medium text-sm leading-snug truncate" style={{ color: 'var(--input-text)' }}>{item.name}</p>
@@ -360,7 +420,12 @@ export default function Inventory() {
                     <tr key={item.id} className="table-row">
                       <td className="td">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400/50 shrink-0"><Tag size={12} /></div>
+                          <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border" style={{ borderColor: 'var(--card-border)' }}>
+                            {item.image_url
+                              ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                              : <div className="w-full h-full bg-amber-500/10 flex items-center justify-center text-amber-400/50"><Tag size={12} /></div>
+                            }
+                          </div>
                           <div>
                             <p className="font-medium leading-none" style={{ color: 'var(--input-text)' }}>{item.name}</p>
                             {item.notes && <p className="text-xs mt-0.5 truncate max-w-[160px]" style={{ color: 'var(--input-placeholder)' }}>{item.notes}</p>}

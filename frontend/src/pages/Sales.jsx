@@ -79,7 +79,10 @@ function SaleCard({ sale, onEdit, onDelete }) {
   return (
     <div className="mobile-card">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        {sale.image_url && (
+          <img src={sale.image_url} alt={sale.item_name} className="w-16 h-16 rounded-lg object-cover shrink-0" />
+        )}
+        <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate" style={{ color: 'var(--input-text)' }}>{sale.item_name}</p>
           {sale.brand && (
             <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--input-placeholder)' }}>{sale.brand} · {sale.category}</p>
@@ -260,6 +263,7 @@ export default function Sales() {
             <table className="w-full min-w-[780px]">
               <thead className="border-b" style={{ borderColor: 'var(--card-border)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
                 <tr>
+                  <th className="th">Image</th>
                   <SortTh col="item_name">Item</SortTh>
                   <th className="th">Category</th>
                   <SortTh col="selling_price">Revenue</SortTh>
@@ -278,10 +282,17 @@ export default function Sales() {
                     <tr key={i} className="table-row">{Array.from({ length: 10 }).map((_, j) => <td key={j} className="td"><div className="h-4 rounded-md bg-white/[0.05] animate-pulse w-3/4" /></td>)}</tr>
                   ))
                 ) : sales.length === 0 ? (
-                  <tr><td colSpan={10} className="td text-center py-12" style={{ color: 'var(--input-placeholder)' }}>No sales yet. Mark items as sold from Inventory.</td></tr>
+                  <tr><td colSpan={11} className="td text-center py-12" style={{ color: 'var(--input-placeholder)' }}>No sales yet. Mark items as sold from Inventory.</td></tr>
                 ) : (
                   sales.map(sale => (
                     <tr key={sale.id} className="table-row">
+                      <td className="td">
+                        {sale.image_url ? (
+                          <img src={sale.image_url} alt={sale.item_name} className="w-12 h-12 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-white/[0.06]" />
+                        )}
+                      </td>
                       <td className="td">
                         <p className="font-medium">{sale.item_name}</p>
                         {sale.brand && <p className="text-xs mt-0.5" style={{ color: 'var(--input-placeholder)' }}>{sale.brand}</p>}
