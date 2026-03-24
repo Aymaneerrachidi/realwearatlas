@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const offset = (pageNum - 1) * limitNum;
 
-    let sql = `SELECT id, name, brand, category, size, condition, purchase_price, selling_price, status,
+    let sql = `SELECT id, name, brand, category, purchase_price, selling_price, status,
               purchase_date, notes,
               CASE WHEN image_url LIKE 'data:%' THEN NULL ELSE image_url END AS image_url,
               submitted_by, created_at, updated_at
@@ -47,11 +47,11 @@ router.get('/meta/categories', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const result = await db.execute({
-      sql: `SELECT id, name, brand, category, size, condition, purchase_price, selling_price, status,
-                   purchase_date, notes,
-                   CASE WHEN image_url LIKE 'data:%' THEN NULL ELSE image_url END AS image_url,
-                   submitted_by, created_at, updated_at
-            FROM items WHERE id = ?`,
+      sql: `SELECT id, name, brand, category, purchase_price, selling_price, status,
+           purchase_date, notes,
+           CASE WHEN image_url LIKE 'data:%' THEN NULL ELSE image_url END AS image_url,
+           submitted_by, created_at, updated_at
+        FROM items WHERE id = ?`,
       args: [req.params.id],
     });
     const item = result.rows[0];
