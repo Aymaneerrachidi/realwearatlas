@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Custom Properties (swap for light/dark) ── */
+:root {
+  --amber: #f5a623;
+  --input-bg:           rgba(255,255,255,0.04);
+  --input-bg-solid:     #1e1e22;
+  --input-text:         #e8e8e6;
+  --input-border:       rgba(255,255,255,0.10);
+  --input-placeholder:  #666666;
+  --input-focus-border: rgba(245,166,35,0.55);
+  --input-focus-ring:   rgba(245,166,35,0.18);
+  --select-opt-bg:      #1c1c1f;
+  --card-bg:            rgba(28,28,31,0.92);
+  --card-border:        rgba(255,255,255,0.07);
+  --sidebar-bg:         #131315;
+  --header-bg:          rgba(15,15,17,0.82);
+}
+
+body.light {
+  --input-bg:           #ffffff;
+  --input-bg-solid:     #ffffff;
+  --input-text:         #18181a;
+  --input-border:       rgba(0,0,0,0.13);
+  --input-placeholder:  #999999;
+  --input-focus-border: rgba(245,166,35,0.70);
+  --input-focus-ring:   rgba(245,166,35,0.22);
+  --select-opt-bg:      #ffffff;
+  --card-bg:            rgba(255,255,255,0.96);
+  --card-border:        rgba(0,0,0,0.07);
+  --sidebar-bg:         #f0efe9;
+  --header-bg:          rgba(248,247,244,0.88);
+}
+
+/* ── Base ── */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  @apply bg-[#0f0f11] text-[#e8e8e6] font-sans antialiased;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245,166,35,0.06), transparent);
+}
+body.light {
+  @apply bg-[#f8f7f4] text-[#18181a];
+  background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245,166,35,0.08), transparent);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.20); }
+body.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+
+/* ── Input — uses CSS vars, works in both modes ── */
+.input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--input-text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.input::placeholder { color: var(--input-placeholder); }
+.input:focus {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 3px var(--input-focus-ring);
+}
+
+/* Select arrow indicator */
+select.input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+  cursor: pointer;
+}
+
+/* Options follow the card/sidebar background */
+select.input option,
+select option {
+  background-color: var(--select-opt-bg) !important;
+  color: var(--input-text) !important;
+}
+
+/* Textarea resize */
+textarea.input { resize: vertical; }
+
+/* ── Components ── */
+@layer components {
+  .card {
+    border-radius: 1rem;
+    border: 1px solid var(--card-border);
+    background-color: var(--card-bg);
+    backdrop-filter: blur(8px);
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl font-sans font-medium text-sm
+           transition-all duration-150 active:scale-95 cursor-pointer select-none;
+  }
+  .btn-primary { @apply btn bg-amber-500 hover:bg-amber-600 text-black; }
+  .btn-ghost {
+    @apply btn bg-white/5 hover:bg-white/10 text-[#e8e8e6] border border-white/10 hover:border-white/20;
+  }
+  .btn-danger { @apply btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20; }
+
+  .label { @apply block text-xs font-medium text-[#999] uppercase tracking-wide mb-1.5; }
+
+  .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
+  .badge-available { @apply badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/20; }
+  .badge-reserved  { @apply badge bg-amber-500/10  text-amber-400  border border-amber-500/20;  }
+  .badge-sold      { @apply badge bg-blue-500/10   text-blue-400   border border-blue-500/20;   }
+
+  .stat-card {
+    @apply p-5 flex flex-col gap-3 transition-colors duration-200;
+    border-radius: 1rem;
+    border: 1px solid var(--card-border);
+    background-color: var(--card-bg);
+  }
+
+  .table-row { @apply border-b border-white/[0.05] hover:bg-white/[0.02] transition-colors duration-100; }
+  .table-row:last-child { @apply border-b-0; }
+
+  .th { @apply px-4 py-3 text-left text-xs font-medium text-[#666] uppercase tracking-wider; }
+  .td { @apply px-4 py-3.5 text-sm; }
+}
+
+/* ── Light mode component overrides ── */
+body.light .btn-ghost {
+  @apply bg-black/5 hover:bg-black/[0.08] text-[#18181a] border-black/10 hover:border-black/20;
+}
+body.light .label   { @apply text-[#666]; }
+body.light .table-row { @apply border-black/[0.06] hover:bg-black/[0.02]; }
+body.light .th { color: #888; }
+
+/* Sidebar + header use CSS vars — these override Tailwind bg classes */
+aside  { background-color: var(--sidebar-bg) !important; border-color: var(--card-border) !important; }
+header { background-color: var(--header-bg) !important; border-color: var(--card-border) !important; }
+
+/* ── Mobile utilities ── */
+/* Safe area for iOS home indicator */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Touch-friendly tap targets */
+@media (max-width: 1023px) {
+  .btn       { min-height: 42px; }
+  .btn-ghost { min-height: 42px; }
+  .input     { min-height: 44px; font-size: 16px; } /* 16px prevents iOS zoom */
+  .td        { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+}
+
+/* Mobile card view for tables */
+.mobile-card {
+  border-radius: 1rem;
+  border: 1px solid var(--card-border);
+  background-color: var(--card-bg);
+  padding: 1rem;
+}
+
+/* Horizontal scroll for period pills */
+.scroll-x-hide {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scroll-x-hide::-webkit-scrollbar { display: none; }
+
+/* Chart tooltip */
+.custom-tooltip {
+  border-radius: 0.75rem;
+  border: 1px solid var(--card-border);
+  background-color: var(--card-bg);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.75rem;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
