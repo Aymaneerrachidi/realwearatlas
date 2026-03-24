@@ -17,6 +17,7 @@ const api = axios.create({
 
 const INVENTORY_READ_TIMEOUT = 12000;
 const INVENTORY_WRITE_TIMEOUT = 60000;
+const INVENTORY_DELETE_TIMEOUT = 12000;
 
 // Attach current user to every request
 api.interceptors.request.use((config) => {
@@ -47,7 +48,7 @@ export const itemsApi = {
   get:        (id)     => api.get(`/items/${id}`),
   create:     (data)   => api.post('/items', data, { timeout: INVENTORY_WRITE_TIMEOUT }),
   update:     (id, d)  => api.patch(`/items/${id}`, d, { timeout: INVENTORY_WRITE_TIMEOUT }),
-  delete:     (id)     => api.delete(`/items/${id}`),
+  delete:     (id)     => api.delete(`/items/${id}`, { timeout: INVENTORY_DELETE_TIMEOUT }),
   categories: ()       => api.get('/items/meta/categories'),
 };
 

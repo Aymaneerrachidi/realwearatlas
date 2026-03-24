@@ -134,8 +134,9 @@ router.delete('/:id', async (req, res) => {
     const item = itemRes.rows[0];
     if (!item) return res.status(404).json({ error: 'Item not found' });
     const user = getUser(req);
+    await db.execute({ sql: 'DELETE FROM sales WHERE item_id = ?', args: [req.params.id] });
     await db.execute({ sql: 'DELETE FROM items WHERE id = ?', args: [req.params.id] });
-    await log(user, 'deleted', 'item', req.params.id, item.name, { purchase_price: item.purchase_price, status: item.status });
+    log(user, 'deleted', 'item', req.params.id, item.name, { purchase_price: item.purchase_price, status: item.status });
     res.json({ message: 'Item deleted' });
   } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });

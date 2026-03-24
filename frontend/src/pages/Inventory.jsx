@@ -393,15 +393,24 @@ export default function Inventory() {
   };
 
   const handleDelete = async () => {
+    if (!selected?.id) return;
+    const deletedId = selected.id;
+    const previousItems = items;
+
     setSaving(true);
+    setModal(null);
+    setSelected(null);
+    setItems(prev => prev.filter(item => item.id !== deletedId));
+
     try {
-      const deletedId = selected.id;
       await itemsApi.delete(deletedId);
-      setItems(prev => prev.filter(item => item.id !== deletedId));
       toast('Deleted');
-      setModal(null); setSelected(null); load({ background: true });
+      load({ background: true });
     }
-    catch (err) { toast(err.message, 'error'); }
+    catch (err) {
+      setItems(previousItems);
+      toast(err.message || 'Delete failed', 'error');
+    }
     finally { setSaving(false); }
   };
 
