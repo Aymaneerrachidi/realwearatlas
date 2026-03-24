@@ -31,7 +31,7 @@ api.interceptors.response.use(
 
 // ── Items ─────────────────────────────────────────
 export const itemsApi = {
-  list:       (params) => api.get('/items', { params, timeout: INVENTORY_READ_TIMEOUT }),
+  list:       (params) => api.get('/items', { params: { limit: 15, page: 1, ...(params || {}) }, timeout: INVENTORY_READ_TIMEOUT }),
   get:        (id)     => api.get(`/items/${id}`),
   create:     (data)   => api.post('/items', data, { timeout: INVENTORY_WRITE_TIMEOUT }),
   update:     (id, d)  => api.patch(`/items/${id}`, d, { timeout: INVENTORY_WRITE_TIMEOUT }),

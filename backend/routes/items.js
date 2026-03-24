@@ -10,20 +10,24 @@ const errMsg = (err) => { if (!err) return 'Unknown error'; if (typeof err === '
 // GET /api/items
 router.get('/', async (req, res) => {
   try {
-    const { status, category, search, sort = 'created_at', order = 'desc' } = req.query;
+    const { status, category, search, sort = 'created_at', order = 'desc', limit = '15', page = '1' } = req.query;
     const validSorts = ['name','brand','category','purchase_price','purchase_date','status','created_at'];
     const sortCol = validSorts.includes(sort) ? sort : 'created_at';
     const sortDir = order === 'asc' ? 'asc' : 'desc';
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 15, 1), 50);
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const offset = (pageNum - 1) * limitNum;
 
     let sql = 'SELECT * FROM items WHERE 1=1';
     const args = [];
     if (status)   { sql += ' AND status = ?';   args.push(status); }
     if (category) { sql += ' AND category = ?'; args.push(category); }
     if (search)   { sql += ' AND (name LIKE ? OR brand LIKE ? OR notes LIKE ?)'; args.push(`%${search}%`, `%${search}%`, `%${search}%`); }
-    sql += ` ORDER BY ${sortCol} ${sortDir}`;
+    sql += ` ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
+    args.push(limitNum, offset);
 
     const result = await db.execute({ sql, args });
-    res.json({ data: result.rows, total: result.rows.length });
+    res.json({ data: result.rows, total: result.rows.length, page: pageNum, limit: limitNum });
   } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
