@@ -1,7 +1,16 @@
 import axios from 'axios';
 
+const configuredApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+const isBrowser = typeof window !== 'undefined';
+const isConfiguredLocalhost = /localhost|127\.0\.0\.1/i.test(configuredApiUrl);
+const isRunningLocally = isBrowser && /localhost|127\.0\.0\.1/i.test(window.location.hostname);
+
+const resolvedBaseURL = configuredApiUrl && (!isConfiguredLocalhost || isRunningLocally)
+  ? `${configuredApiUrl.replace(/\/$/, '')}/api`
+  : '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
+  baseURL: resolvedBaseURL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
@@ -21,6 +30,9 @@ api.interceptors.response.use(
   (err) => {
     if (err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
       return Promise.reject(new Error('Request timed out. Please refresh and check if it saved, then try again.'));
+    }
+    if (!err.response && /Network Error/i.test(err.message || '')) {
+      return Promise.reject(new Error('Cannot reach API. Check VITE_API_URL for deployment or use same-origin /api.'));
     }
     let msg = err.response?.data?.error;
     if (msg && typeof msg !== 'string') msg = msg.message || JSON.stringify(msg);
