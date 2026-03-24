@@ -6,6 +6,8 @@ const api = axios.create({
   timeout: 10000,
 });
 
+const INVENTORY_WRITE_TIMEOUT = 30000;
+
 // Attach current user to every request
 api.interceptors.request.use((config) => {
   const user = localStorage.getItem('rwa-user') || 'Aymane';
@@ -16,6 +18,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
+    if (err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
+      return Promise.reject(new Error('Request timed out. Try again, or use a smaller image.'));
+    }
     let msg = err.response?.data?.error;
     if (msg && typeof msg !== 'string') msg = msg.message || JSON.stringify(msg);
     msg = msg || err.message || 'Unknown error';
@@ -27,8 +32,8 @@ api.interceptors.response.use(
 export const itemsApi = {
   list:       (params) => api.get('/items', { params }),
   get:        (id)     => api.get(`/items/${id}`),
-  create:     (data)   => api.post('/items', data),
-  update:     (id, d)  => api.patch(`/items/${id}`, d),
+  create:     (data)   => api.post('/items', data, { timeout: INVENTORY_WRITE_TIMEOUT }),
+  update:     (id, d)  => api.patch(`/items/${id}`, d, { timeout: INVENTORY_WRITE_TIMEOUT }),
   delete:     (id)     => api.delete(`/items/${id}`),
   categories: ()       => api.get('/items/meta/categories'),
 };
