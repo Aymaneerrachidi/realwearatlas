@@ -1,35 +1,37 @@
 const express = require('express');
-const db = require('../database/db');
+const { db } = require('../database/db');
 
 const router = express.Router();
 
-// GET /api/activity — full log with filters
-router.get('/', (req, res) => {
+// GET /api/activity
+router.get('/', async (req, res) => {
   try {
     const { user, action, entity_type, from, to, limit = 100, offset = 0 } = req.query;
 
-    let query = 'SELECT * FROM activity_log WHERE 1=1';
-    const params = [];
-    if (user)        { query += ' AND user_name = ?'; params.push(user); }
-    if (action)      { query += ' AND action = ?'; params.push(action); }
-    if (entity_type) { query += ' AND entity_type = ?'; params.push(entity_type); }
-    if (from)        { query += ' AND created_at >= ?'; params.push(from); }
-    if (to)          { query += ' AND created_at <= ?'; params.push(to + ' 23:59:59'); }
+    let sql = 'SELECT * FROM activity_log WHERE 1=1';
+    const args = [];
+    if (user)        { sql += ' AND user_name = ?'; args.push(user); }
+    if (action)      { sql += ' AND action = ?'; args.push(action); }
+    if (entity_type) { sql += ' AND entity_type = ?'; args.push(entity_type); }
+    if (from)        { sql += ' AND created_at >= ?'; args.push(from); }
+    if (to)          { sql += ' AND created_at <= ?'; args.push(to + ' 23:59:59'); }
 
-    const total = db.prepare(`SELECT COUNT(*) AS cnt FROM (${query})`).get(...params).cnt;
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    const countRes = await db.execute({ sql: `SELECT COUNT(*) AS cnt FROM (${sql})`, args });
+    const total = Number(countRes.rows[0].cnt);
 
-    const rows = db.prepare(query).all(...params);
-    res.json({ data: rows, total, limit: parseInt(limit), offset: parseInt(offset) });
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    args.push(parseInt(limit), parseInt(offset));
+
+    const result = await db.execute({ sql, args });
+    res.json({ data: result.rows, total, limit: parseInt(limit), offset: parseInt(offset) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/activity/users — distinct users
-router.get('/users', (req, res) => {
+// GET /api/activity/users
+router.get('/users', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT DISTINCT user_name FROM activity_log ORDER BY user_name').all();
-    res.json(rows.map(r => r.user_name));
+    const result = await db.execute('SELECT DISTINCT user_name FROM activity_log ORDER BY user_name');
+    res.json(result.rows.map(r => r.user_name));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

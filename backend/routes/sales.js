@@ -1,6 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const db = require('../database/db');
+const { db } = require('../database/db');
 const log = require('../utils/logger');
 
 const router = express.Router();
@@ -14,43 +14,46 @@ const SALE_SELECT = `
 `;
 
 // GET /api/sales
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { from, to, category, search, sort = 'sale_date', order = 'desc' } = req.query;
     const validSorts = ['sale_date','selling_price','buyer_name','platform','created_at'];
     const sortCol = validSorts.includes(sort) ? sort : 'sale_date';
     const sortDir = order === 'asc' ? 'asc' : 'desc';
 
-    let query = SALE_SELECT + ' WHERE 1=1';
-    const params = [];
-    if (from)     { query += ' AND s.sale_date >= ?'; params.push(from); }
-    if (to)       { query += ' AND s.sale_date <= ?'; params.push(to); }
-    if (category) { query += ' AND i.category = ?'; params.push(category); }
-    if (search)   { query += ' AND (i.name LIKE ? OR i.brand LIKE ? OR s.buyer_name LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+    let sql = SALE_SELECT + ' WHERE 1=1';
+    const args = [];
+    if (from)     { sql += ' AND s.sale_date >= ?'; args.push(from); }
+    if (to)       { sql += ' AND s.sale_date <= ?'; args.push(to); }
+    if (category) { sql += ' AND i.category = ?'; args.push(category); }
+    if (search)   { sql += ' AND (i.name LIKE ? OR i.brand LIKE ? OR s.buyer_name LIKE ?)'; args.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+    sql += ` ORDER BY s.${sortCol} ${sortDir}`;
 
-    query += ` ORDER BY s.${sortCol} ${sortDir}`;
-    const sales = db.prepare(query).all(...params);
-    res.json({ data: sales, total: sales.length });
+    const result = await db.execute({ sql, args });
+    res.json({ data: result.rows, total: result.rows.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/sales/:id
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const sale = db.prepare(SALE_SELECT + ' WHERE s.id = ?').get(req.params.id);
+    const result = await db.execute({ sql: SALE_SELECT + ' WHERE s.id = ?', args: [req.params.id] });
+    const sale = result.rows[0];
     if (!sale) return res.status(404).json({ error: 'Sale not found' });
     res.json(sale);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /api/sales
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { item_id, selling_price, sale_date, buyer_name, buyer_contact, platform = 'Instagram', notes } = req.body;
     if (!item_id || selling_price == null || !sale_date) {
       return res.status(400).json({ error: 'Missing required fields: item_id, selling_price, sale_date' });
     }
-    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(item_id);
+
+    const itemRes = await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [item_id] });
+    const item = itemRes.rows[0];
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (item.status === 'sold') return res.status(400).json({ error: 'Item already sold' });
 
@@ -58,58 +61,66 @@ router.post('/', (req, res) => {
     const user = getUser(req);
     const profit = selling_price - item.purchase_price;
 
-    db.transaction(() => {
-      db.prepare(`
-        INSERT INTO sales (id, item_id, selling_price, sale_date, buyer_name, buyer_contact, platform, notes, submitted_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, item_id, selling_price, sale_date, buyer_name || null, buyer_contact || null, platform, notes || null, user);
-      db.prepare(`UPDATE items SET status = 'sold' WHERE id = ?`).run(item_id);
-    })();
+    // Atomic: insert sale + update item status
+    await db.batch([
+      {
+        sql: `INSERT INTO sales (id, item_id, selling_price, sale_date, buyer_name, buyer_contact, platform, notes, submitted_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [id, item_id, selling_price, sale_date, buyer_name || null, buyer_contact || null, platform, notes || null, user],
+      },
+      {
+        sql: `UPDATE items SET status = 'sold' WHERE id = ?`,
+        args: [item_id],
+      },
+    ], 'write');
 
-    const sale = db.prepare(SALE_SELECT + ' WHERE s.id = ?').get(id);
-    log(user, 'created', 'sale', id, item.name, { selling_price, profit: profit.toFixed(2), platform });
+    const sale = (await db.execute({ sql: SALE_SELECT + ' WHERE s.id = ?', args: [id] })).rows[0];
+    await log(user, 'created', 'sale', id, item.name, { selling_price, profit: profit.toFixed(2), platform });
     res.status(201).json(sale);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // PATCH /api/sales/:id
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
-    const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(req.params.id);
+    const saleRes = await db.execute({ sql: 'SELECT * FROM sales WHERE id = ?', args: [req.params.id] });
+    const sale = saleRes.rows[0];
     if (!sale) return res.status(404).json({ error: 'Sale not found' });
 
     const allowed = ['selling_price','sale_date','buyer_name','buyer_contact','platform','notes'];
-    const updates = []; const vals = []; const changes = {};
+    const updates = []; const args = []; const changes = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
-        updates.push(`${key} = ?`); vals.push(req.body[key]);
+        updates.push(`${key} = ?`); args.push(req.body[key]);
         if (sale[key] !== req.body[key]) changes[key] = { from: sale[key], to: req.body[key] };
       }
     }
     if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
 
     const user = getUser(req);
-    vals.push(req.params.id);
-    db.prepare(`UPDATE sales SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
+    args.push(req.params.id);
+    await db.execute({ sql: `UPDATE sales SET ${updates.join(', ')} WHERE id = ?`, args });
 
-    const updated = db.prepare(SALE_SELECT + ' WHERE s.id = ?').get(req.params.id);
-    log(user, 'updated', 'sale', req.params.id, updated.item_name, changes);
+    const updated = (await db.execute({ sql: SALE_SELECT + ' WHERE s.id = ?', args: [req.params.id] })).rows[0];
+    await log(user, 'updated', 'sale', req.params.id, updated.item_name, changes);
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // DELETE /api/sales/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const sale = db.prepare(SALE_SELECT + ' WHERE s.id = ?').get(req.params.id);
+    const saleRes = await db.execute({ sql: SALE_SELECT + ' WHERE s.id = ?', args: [req.params.id] });
+    const sale = saleRes.rows[0];
     if (!sale) return res.status(404).json({ error: 'Sale not found' });
 
     const user = getUser(req);
-    db.transaction(() => {
-      db.prepare('DELETE FROM sales WHERE id = ?').run(req.params.id);
-      db.prepare(`UPDATE items SET status = 'available' WHERE id = ?`).run(sale.item_id);
-    })();
-    log(user, 'deleted', 'sale', req.params.id, sale.item_name, { selling_price: sale.selling_price });
+    await db.batch([
+      { sql: 'DELETE FROM sales WHERE id = ?', args: [req.params.id] },
+      { sql: `UPDATE items SET status = 'available' WHERE id = ?`, args: [sale.item_id] },
+    ], 'write');
+
+    await log(user, 'deleted', 'sale', req.params.id, sale.item_name, { selling_price: sale.selling_price });
     res.json({ message: 'Sale deleted, item restored to available' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

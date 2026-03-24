@@ -1,52 +1,55 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const db = require('../database/db');
+const { db } = require('../database/db');
 const log = require('../utils/logger');
 
 const router = express.Router();
-
 const getUser = (req) => req.body?.submitted_by || req.headers['x-user'] || 'Unknown';
 
 // GET /api/items
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { status, category, search, sort = 'created_at', order = 'desc' } = req.query;
     const validSorts = ['name','brand','category','purchase_price','purchase_date','status','created_at'];
     const sortCol = validSorts.includes(sort) ? sort : 'created_at';
     const sortDir = order === 'asc' ? 'asc' : 'desc';
 
-    let query = 'SELECT * FROM items WHERE 1=1';
-    const params = [];
-    if (status)   { query += ' AND status = ?';   params.push(status); }
-    if (category) { query += ' AND category = ?'; params.push(category); }
-    if (search)   { query += ' AND (name LIKE ? OR brand LIKE ? OR notes LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+    let sql = 'SELECT * FROM items WHERE 1=1';
+    const args = [];
+    if (status)   { sql += ' AND status = ?';   args.push(status); }
+    if (category) { sql += ' AND category = ?'; args.push(category); }
+    if (search)   { sql += ' AND (name LIKE ? OR brand LIKE ? OR notes LIKE ?)'; args.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+    sql += ` ORDER BY ${sortCol} ${sortDir}`;
 
-    query += ` ORDER BY ${sortCol} ${sortDir}`;
-    const items = db.prepare(query).all(...params);
-    res.json({ data: items, total: items.length });
+    const result = await db.execute({ sql, args });
+    res.json({ data: result.rows, total: result.rows.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/items/meta/categories
-router.get('/meta/categories', (req, res) => {
+router.get('/meta/categories', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT DISTINCT category FROM items ORDER BY category').all();
-    res.json(rows.map(r => r.category));
+    const result = await db.execute('SELECT DISTINCT category FROM items ORDER BY category');
+    res.json(result.rows.map(r => r.category));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/items/:id
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+    const result = await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [req.params.id] });
+    const item = result.rows[0];
     if (!item) return res.status(404).json({ error: 'Item not found' });
-    if (item.status === 'sold') item.sale = db.prepare('SELECT * FROM sales WHERE item_id = ?').get(item.id) || null;
+    if (item.status === 'sold') {
+      const saleRes = await db.execute({ sql: 'SELECT * FROM sales WHERE item_id = ?', args: [item.id] });
+      item.sale = saleRes.rows[0] || null;
+    }
     res.json(item);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/items — only name + purchase_price are truly required
-router.post('/', (req, res) => {
+// POST /api/items
+router.post('/', async (req, res) => {
   try {
     const {
       name, brand, category = 'other',
@@ -61,54 +64,56 @@ router.post('/', (req, res) => {
     const id = uuidv4();
     const user = getUser(req);
 
-    db.prepare(`
-      INSERT INTO items (id, name, brand, category, purchase_price, purchase_date, notes, image_url, status, submitted_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, brand || null, category, purchase_price, purchase_date, notes || null, image_url || null, status, user);
+    await db.execute({
+      sql: `INSERT INTO items (id, name, brand, category, purchase_price, purchase_date, notes, image_url, status, submitted_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, name, brand || null, category, purchase_price, purchase_date, notes || null, image_url || null, status, user],
+    });
 
-    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(id);
-    log(user, 'created', 'item', id, name, { purchase_price, category, status });
-    res.status(201).json(item);
+    const created = (await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [id] })).rows[0];
+    await log(user, 'created', 'item', id, name, { purchase_price, category, status });
+    res.status(201).json(created);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // PATCH /api/items/:id
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
-    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+    const itemRes = await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [req.params.id] });
+    const item = itemRes.rows[0];
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
     const allowed = ['name','brand','category','purchase_price','purchase_date','notes','image_url','status'];
-    const updates = []; const vals = [];
-    const changes = {};
+    const updates = []; const args = []; const changes = {};
 
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         updates.push(`${key} = ?`);
-        vals.push(req.body[key]);
+        args.push(req.body[key]);
         if (item[key] !== req.body[key]) changes[key] = { from: item[key], to: req.body[key] };
       }
     }
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
 
     const user = getUser(req);
-    vals.push(req.params.id);
-    db.prepare(`UPDATE items SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
+    args.push(req.params.id);
+    await db.execute({ sql: `UPDATE items SET ${updates.join(', ')} WHERE id = ?`, args });
 
-    const updated = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
-    log(user, 'updated', 'item', req.params.id, item.name, changes);
+    const updated = (await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [req.params.id] })).rows[0];
+    await log(user, 'updated', 'item', req.params.id, item.name, changes);
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // DELETE /api/items/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+    const itemRes = await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [req.params.id] });
+    const item = itemRes.rows[0];
     if (!item) return res.status(404).json({ error: 'Item not found' });
     const user = getUser(req);
-    db.prepare('DELETE FROM items WHERE id = ?').run(req.params.id);
-    log(user, 'deleted', 'item', req.params.id, item.name, { purchase_price: item.purchase_price, status: item.status });
+    await db.execute({ sql: 'DELETE FROM items WHERE id = ?', args: [req.params.id] });
+    await log(user, 'deleted', 'item', req.params.id, item.name, { purchase_price: item.purchase_price, status: item.status });
     res.json({ message: 'Item deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
