@@ -20,6 +20,17 @@ npm run dev        # starts on http://localhost:5173
 
 Then open **http://localhost:5173** in your browser.
 
+### Optional: Image upload hosting (recommended)
+Create `frontend/.env` with:
+
+```bash
+VITE_API_URL=http://localhost:3001
+VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
+VITE_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
+```
+
+Inventory image upload now stores hosted URLs (Cloudinary), not base64.
+
 ---
 
 ## API Endpoints

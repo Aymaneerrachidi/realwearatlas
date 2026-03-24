@@ -12,6 +12,8 @@ import { inventoryCSV, inventoryPDF } from '../utils/export';
 const CATEGORIES = ['hoodie','jeans','sneakers','jacket','shirt','dress','pants','bag','accessories','other'];
 const fmt = (v) => `${Number(v || 0).toFixed(2)} DH`;
 const USER_COLORS = { Aymane: 'bg-amber-500/20 text-amber-400', Zaid: 'bg-blue-500/20 text-blue-400' };
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 function EmployeeSelect({ value, onChange }) {
   return (
@@ -24,7 +26,7 @@ function EmployeeSelect({ value, onChange }) {
   );
 }
 
-// Compress image to JPEG base64 with aggressive size cap for faster API requests
+// Compress image before upload to external image host
 function compressImage(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -60,7 +62,10 @@ function compressImage(file) {
           output = downscaled.toDataURL('image/jpeg', Math.max(MIN_QUALITY, quality));
         }
 
-        resolve(output);
+        fetch(output)
+          .then(r => r.blob())
+          .then(resolve)
+          .catch(reject);
       };
       img.src = e.target.result;
     };
@@ -68,12 +73,46 @@ function compressImage(file) {
   });
 }
 
-function ImageUpload({ value, onChange }) {
+async function uploadToCloudinary(file) {
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    throw new Error('Image upload not configured. Add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET.');
+  }
+
+  const compressed = await compressImage(file);
+  const form = new FormData();
+  form.append('file', compressed, file.name || 'item.jpg');
+  form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: form,
+  });
+
+  const result = await response.json();
+  if (!response.ok || !result?.secure_url) {
+    throw new Error(result?.error?.message || 'Image upload failed');
+  }
+
+  return result.secure_url;
+}
+
+function ImageUpload({ value, onChange, onError }) {
   const ref = useRef();
+  const [uploading, setUploading] = useState(false);
+
   const handleFile = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
-    try { onChange(await compressImage(file)); } catch {}
+    setUploading(true);
+    try {
+      const hostedUrl = await uploadToCloudinary(file);
+      onChange(hostedUrl);
+    } catch (error) {
+      onError?.(error.message || 'Image upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
+
   return (
     <div>
       <label className="label">Photo</label>
@@ -87,21 +126,21 @@ function ImageUpload({ value, onChange }) {
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => ref.current.click()}
+          <button type="button" onClick={() => !uploading && ref.current.click()} disabled={uploading}
             className="w-full h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-amber-500/50 hover:bg-amber-500/5"
             style={{ borderColor: 'var(--card-border)', color: 'var(--input-placeholder)' }}>
             <Camera size={18} />
-            <span className="text-xs">Tap to upload photo</span>
+            <span className="text-xs">{uploading ? 'Uploading…' : 'Tap to upload photo'}</span>
           </button>
         )}
         <input ref={ref} type="file" accept="image/*" className="hidden"
-          onChange={e => handleFile(e.target.files[0])} />
+          onChange={e => handleFile(e.target.files[0])} disabled={uploading} />
       </div>
     </div>
   );
 }
 
-function ItemForm({ initial, onSave, onCancel, loading, defaultUser }) {
+function ItemForm({ initial, onSave, onCancel, loading, defaultUser, onUploadError }) {
   const [form, setForm] = useState({
     name: '', brand: '', category: 'hoodie', purchase_price: '',
     purchase_date: new Date().toISOString().split('T')[0],
@@ -155,7 +194,7 @@ function ItemForm({ initial, onSave, onCancel, loading, defaultUser }) {
         </div>
         <EmployeeSelect value={form.submitted_by} onChange={v => set('submitted_by', v)} />
       </div>
-      <ImageUpload value={form.image_url || ''} onChange={v => set('image_url', v)} />
+      <ImageUpload value={form.image_url || ''} onChange={v => set('image_url', v)} onError={onUploadError} />
       <div>
         <label className="label">Notes</label>
         <textarea className="input resize-none" rows={2} placeholder="Condition, size…"
@@ -508,7 +547,7 @@ export default function Inventory() {
       </div>
 
       <Modal open={modal === 'add' || modal === 'edit'} onClose={() => { setModal(null); setSelected(null); }} title={modal === 'edit' ? 'Edit Item' : 'Add New Item'}>
-        <ItemForm initial={selected} onSave={handleSave} onCancel={() => { setModal(null); setSelected(null); }} loading={saving} defaultUser={user} />
+        <ItemForm initial={selected} onSave={handleSave} onCancel={() => { setModal(null); setSelected(null); }} loading={saving} defaultUser={user} onUploadError={(msg) => toast(msg, 'error')} />
       </Modal>
       <Modal open={modal === 'sell'} onClose={() => { setModal(null); setSelected(null); }} title="Record Sale">
         {selected && <SellForm item={selected} onSave={handleSell} onCancel={() => { setModal(null); setSelected(null); }} loading={saving} defaultUser={user} />}

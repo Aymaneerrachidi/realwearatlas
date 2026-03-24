@@ -18,7 +18,11 @@ router.get('/', async (req, res) => {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const offset = (pageNum - 1) * limitNum;
 
-    let sql = 'SELECT * FROM items WHERE 1=1';
+    let sql = `SELECT id, name, brand, category, size, condition, purchase_price, selling_price, status,
+              purchase_date, notes,
+              CASE WHEN image_url LIKE 'data:%' THEN NULL ELSE image_url END AS image_url,
+              submitted_by, created_at, updated_at
+           FROM items WHERE 1=1`;
     const args = [];
     if (status)   { sql += ' AND status = ?';   args.push(status); }
     if (category) { sql += ' AND category = ?'; args.push(category); }
@@ -42,7 +46,14 @@ router.get('/meta/categories', async (req, res) => {
 // GET /api/items/:id
 router.get('/:id', async (req, res) => {
   try {
-    const result = await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [req.params.id] });
+    const result = await db.execute({
+      sql: `SELECT id, name, brand, category, size, condition, purchase_price, selling_price, status,
+                   purchase_date, notes,
+                   CASE WHEN image_url LIKE 'data:%' THEN NULL ELSE image_url END AS image_url,
+                   submitted_by, created_at, updated_at
+            FROM items WHERE id = ?`,
+      args: [req.params.id],
+    });
     const item = result.rows[0];
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (item.status === 'sold') {
@@ -64,6 +75,9 @@ router.post('/', async (req, res) => {
 
     if (!name || purchase_price == null) {
       return res.status(400).json({ error: 'Missing required fields: name, purchase_price' });
+    }
+    if (image_url && typeof image_url === 'string' && image_url.startsWith('data:')) {
+      return res.status(400).json({ error: 'Base64 images are not supported. Upload to an external image host.' });
     }
 
     const id = uuidv4();
@@ -93,6 +107,9 @@ router.patch('/:id', async (req, res) => {
 
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
+        if (key === 'image_url' && typeof req.body[key] === 'string' && req.body[key].startsWith('data:')) {
+          return res.status(400).json({ error: 'Base64 images are not supported. Upload to an external image host.' });
+        }
         updates.push(`${key} = ?`);
         args.push(req.body[key]);
         if (item[key] !== req.body[key]) changes[key] = { from: item[key], to: req.body[key] };

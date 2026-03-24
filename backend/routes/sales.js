@@ -8,7 +8,8 @@ const getUser = (req) => req.body?.submitted_by || req.headers['x-user'] || 'Unk
 const errMsg = (err) => { if (!err) return 'Unknown error'; if (typeof err === 'string') return err; if (err.message) return err.message; try { const s = JSON.stringify(err); return (s && s !== '{}') ? s : 'Unknown error'; } catch { return 'Unknown error'; } };
 
 const SALE_SELECT = `
-  SELECT s.*, i.name AS item_name, i.brand, i.category, i.purchase_price, i.image_url,
+  SELECT s.*, i.name AS item_name, i.brand, i.category, i.purchase_price,
+         CASE WHEN i.image_url LIKE 'data:%' THEN NULL ELSE i.image_url END AS image_url,
          (s.selling_price - i.purchase_price) AS profit,
          ROUND(((s.selling_price - i.purchase_price) / s.selling_price) * 100, 2) AS margin
   FROM sales s JOIN items i ON s.item_id = i.id
