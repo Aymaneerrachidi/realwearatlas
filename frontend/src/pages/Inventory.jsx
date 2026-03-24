@@ -281,7 +281,8 @@ function SellForm({ item, onSave, onCancel, loading, defaultUser }) {
 }
 
 // ── Mobile card ────────────────────────────────────────────────────
-function ItemCard({ item, onEdit, onSell, onDelete }) {
+function ItemCard({ item, onEdit, onSell, onDelete, deletingId }) {
+  const isDeleting = deletingId === item.id;
   return (
     <div className="mobile-card">
       <div className="flex items-start justify-between gap-3">
@@ -322,7 +323,7 @@ function ItemCard({ item, onEdit, onSell, onDelete }) {
             style={{ color: 'var(--input-placeholder)' }}>
             <Edit2 size={14} />
           </button>
-          <button onClick={() => onDelete(item)}
+          <button onClick={() => onDelete(item)} disabled={isDeleting}
             className="p-2 rounded-xl hover:bg-rose-500/10 text-rose-400/60 hover:text-rose-400 active:scale-95 transition-transform">
             <Trash2 size={14} />
           </button>
@@ -347,6 +348,7 @@ export default function Inventory() {
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const load = useCallback(async ({ background = false } = {}) => {
     if (background) setBackgroundRefreshing(true);
@@ -395,23 +397,20 @@ export default function Inventory() {
   const handleDelete = async () => {
     if (!selected?.id) return;
     const deletedId = selected.id;
-    const previousItems = items;
-
-    setSaving(true);
-    setModal(null);
-    setSelected(null);
-    setItems(prev => prev.filter(item => item.id !== deletedId));
+    setDeletingId(deletedId);
 
     try {
       await itemsApi.delete(deletedId);
+      setItems(prev => prev.filter(item => item.id !== deletedId));
       toast('Deleted');
+      setModal(null);
+      setSelected(null);
       load({ background: true });
     }
     catch (err) {
-      setItems(previousItems);
       toast(err.message || 'Delete failed', 'error');
     }
-    finally { setSaving(false); }
+    finally { setDeletingId(null); }
   };
 
   const openSell   = (item) => { setSelected(item); setModal('sell'); };
@@ -481,7 +480,7 @@ export default function Inventory() {
             </div>
           ) : (
             items.map(item => (
-              <ItemCard key={item.id} item={item} onEdit={openEdit} onSell={openSell} onDelete={openDelete} />
+              <ItemCard key={item.id} item={item} onEdit={openEdit} onSell={openSell} onDelete={openDelete} deletingId={deletingId} />
             ))
           )}
         </div>
@@ -543,7 +542,7 @@ export default function Inventory() {
                             <button onClick={() => openSell(item)} className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors"><ShoppingBag size={13} /></button>
                           )}
                           <button onClick={() => openEdit(item)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors" style={{ color: 'var(--input-placeholder)' }}><Edit2 size={13} /></button>
-                          <button onClick={() => openDelete(item)} className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-400/60 hover:text-rose-400 transition-colors"><Trash2 size={13} /></button>
+                          <button onClick={() => openDelete(item)} disabled={deletingId === item.id} className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-400/60 hover:text-rose-400 transition-colors disabled:opacity-40"><Trash2 size={13} /></button>
                         </div>
                       </td>
                     </tr>
@@ -566,8 +565,8 @@ export default function Inventory() {
           Delete <strong style={{ color: 'var(--input-text)' }}>{selected?.name}</strong>? Cannot be undone.
         </p>
         <div className="flex gap-2">
-          <button onClick={() => { setModal(null); setSelected(null); }} className="btn-ghost flex-1">Cancel</button>
-          <button onClick={handleDelete} className="btn-danger flex-1" disabled={saving}>{saving ? 'Deleting…' : 'Delete'}</button>
+          <button onClick={() => { setModal(null); setSelected(null); }} className="btn-ghost flex-1" disabled={deletingId === selected?.id}>Cancel</button>
+          <button onClick={handleDelete} className="btn-danger flex-1" disabled={deletingId === selected?.id}>{deletingId === selected?.id ? 'Deleting…' : 'Delete'}</button>
         </div>
       </Modal>
     </div>
