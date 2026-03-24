@@ -2,6 +2,7 @@ const express = require('express');
 const { db } = require('../database/db');
 
 const router = express.Router();
+const errMsg = (err) => err?.message || String(err) || 'Unknown error';
 
 // GET /api/activity
 router.get('/', async (req, res) => {
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
 
     const result = await db.execute({ sql, args });
     res.json({ data: result.rows, total, limit: parseInt(limit), offset: parseInt(offset) });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/activity/users
@@ -32,7 +33,7 @@ router.get('/users', async (req, res) => {
   try {
     const result = await db.execute('SELECT DISTINCT user_name FROM activity_log ORDER BY user_name');
     res.json(result.rows.map(r => r.user_name));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 module.exports = router;

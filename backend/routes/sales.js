@@ -5,6 +5,7 @@ const log = require('../utils/logger');
 
 const router = express.Router();
 const getUser = (req) => req.body?.submitted_by || req.headers['x-user'] || 'Unknown';
+const errMsg = (err) => err?.message || String(err) || 'Unknown error';
 
 const SALE_SELECT = `
   SELECT s.*, i.name AS item_name, i.brand, i.category, i.purchase_price,
@@ -31,7 +32,7 @@ router.get('/', async (req, res) => {
 
     const result = await db.execute({ sql, args });
     res.json({ data: result.rows, total: result.rows.length });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/sales/:id
@@ -41,7 +42,7 @@ router.get('/:id', async (req, res) => {
     const sale = result.rows[0];
     if (!sale) return res.status(404).json({ error: 'Sale not found' });
     res.json(sale);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // POST /api/sales
@@ -61,23 +62,17 @@ router.post('/', async (req, res) => {
     const user = getUser(req);
     const profit = selling_price - item.purchase_price;
 
-    // Atomic: insert sale + update item status
-    await db.batch([
-      {
-        sql: `INSERT INTO sales (id, item_id, selling_price, sale_date, buyer_name, buyer_contact, platform, notes, submitted_by)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [id, item_id, selling_price, sale_date, buyer_name || null, buyer_contact || null, platform, notes || null, user],
-      },
-      {
-        sql: `UPDATE items SET status = 'sold' WHERE id = ?`,
-        args: [item_id],
-      },
-    ], 'write');
+    await db.execute({
+      sql: `INSERT INTO sales (id, item_id, selling_price, sale_date, buyer_name, buyer_contact, platform, notes, submitted_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, item_id, selling_price, sale_date, buyer_name || null, buyer_contact || null, platform, notes || null, user],
+    });
+    await db.execute({ sql: `UPDATE items SET status = 'sold' WHERE id = ?`, args: [item_id] });
 
     const sale = (await db.execute({ sql: SALE_SELECT + ' WHERE s.id = ?', args: [id] })).rows[0];
     await log(user, 'created', 'sale', id, item.name, { selling_price, profit: profit.toFixed(2), platform });
     res.status(201).json(sale);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // PATCH /api/sales/:id
@@ -87,7 +82,7 @@ router.patch('/:id', async (req, res) => {
     const sale = saleRes.rows[0];
     if (!sale) return res.status(404).json({ error: 'Sale not found' });
 
-    const allowed = ['selling_price','sale_date','buyer_name','buyer_contact','platform','notes'];
+    const allowed = ['selling_price','sale_date','buyer_name','buyer_contact','platform','notes','submitted_by'];
     const updates = []; const args = []; const changes = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -104,7 +99,7 @@ router.patch('/:id', async (req, res) => {
     const updated = (await db.execute({ sql: SALE_SELECT + ' WHERE s.id = ?', args: [req.params.id] })).rows[0];
     await log(user, 'updated', 'sale', req.params.id, updated.item_name, changes);
     res.json(updated);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // DELETE /api/sales/:id
@@ -115,14 +110,12 @@ router.delete('/:id', async (req, res) => {
     if (!sale) return res.status(404).json({ error: 'Sale not found' });
 
     const user = getUser(req);
-    await db.batch([
-      { sql: 'DELETE FROM sales WHERE id = ?', args: [req.params.id] },
-      { sql: `UPDATE items SET status = 'available' WHERE id = ?`, args: [sale.item_id] },
-    ], 'write');
+    await db.execute({ sql: 'DELETE FROM sales WHERE id = ?', args: [req.params.id] });
+    await db.execute({ sql: `UPDATE items SET status = 'available' WHERE id = ?`, args: [sale.item_id] });
 
     await log(user, 'deleted', 'sale', req.params.id, sale.item_name, { selling_price: sale.selling_price });
     res.json({ message: 'Sale deleted, item restored to available' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 module.exports = router;

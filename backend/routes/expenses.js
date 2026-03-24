@@ -5,6 +5,7 @@ const log = require('../utils/logger');
 
 const router = express.Router();
 const getUser = (req) => req.body?.submitted_by || req.headers['x-user'] || 'Unknown';
+const errMsg = (err) => err?.message || String(err) || 'Unknown error';
 
 // GET /api/expenses
 router.get('/', async (req, res) => {
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
 
     const result = await db.execute({ sql, args });
     res.json({ data: result.rows, total: result.rows.length });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/expenses/:id
@@ -34,7 +35,7 @@ router.get('/:id', async (req, res) => {
     const expense = result.rows[0];
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     res.json(expense);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // POST /api/expenses
@@ -57,7 +58,7 @@ router.post('/', async (req, res) => {
     const expense = (await db.execute({ sql: 'SELECT * FROM expenses WHERE id = ?', args: [id] })).rows[0];
     await log(user, 'created', 'expense', id, `${category} expense`, { amount, category });
     res.status(201).json(expense);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // PATCH /api/expenses/:id
@@ -83,7 +84,7 @@ router.patch('/:id', async (req, res) => {
     const updated = (await db.execute({ sql: 'SELECT * FROM expenses WHERE id = ?', args: [req.params.id] })).rows[0];
     await log(user, 'updated', 'expense', req.params.id, `${expense.category} expense`, changes);
     res.json(updated);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // DELETE /api/expenses/:id
@@ -96,7 +97,7 @@ router.delete('/:id', async (req, res) => {
     await db.execute({ sql: 'DELETE FROM expenses WHERE id = ?', args: [req.params.id] });
     await log(user, 'deleted', 'expense', req.params.id, `${expense.category} expense`, { amount: expense.amount });
     res.json({ message: 'Expense deleted' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 module.exports = router;

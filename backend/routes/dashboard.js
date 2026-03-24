@@ -2,6 +2,7 @@ const express = require('express');
 const { db } = require('../database/db');
 
 const router = express.Router();
+const errMsg = (err) => err?.message || String(err) || 'Unknown error';
 
 // GET /api/dashboard/stats
 router.get('/stats', async (req, res) => {
@@ -48,7 +49,7 @@ router.get('/stats', async (req, res) => {
       : 0;
 
     res.json({ ...salesStats, ...expStats, ...inventoryStats, net_profit, margin: parseFloat(margin) });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/dashboard/revenue-over-time
@@ -73,7 +74,7 @@ router.get('/revenue-over-time', async (req, res) => {
       args,
     });
     res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/dashboard/category-breakdown
@@ -98,7 +99,7 @@ router.get('/category-breakdown', async (req, res) => {
       args,
     });
     res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/dashboard/expenses-breakdown
@@ -116,7 +117,7 @@ router.get('/expenses-breakdown', async (req, res) => {
       args,
     });
     res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/dashboard/recent-activity
@@ -139,7 +140,7 @@ router.get('/recent-activity', async (req, res) => {
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 10);
     res.json(all);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 module.exports = router;

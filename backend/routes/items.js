@@ -5,6 +5,7 @@ const log = require('../utils/logger');
 
 const router = express.Router();
 const getUser = (req) => req.body?.submitted_by || req.headers['x-user'] || 'Unknown';
+const errMsg = (err) => err?.message || String(err) || 'Unknown error';
 
 // GET /api/items
 router.get('/', async (req, res) => {
@@ -23,7 +24,7 @@ router.get('/', async (req, res) => {
 
     const result = await db.execute({ sql, args });
     res.json({ data: result.rows, total: result.rows.length });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/items/meta/categories
@@ -31,7 +32,7 @@ router.get('/meta/categories', async (req, res) => {
   try {
     const result = await db.execute('SELECT DISTINCT category FROM items ORDER BY category');
     res.json(result.rows.map(r => r.category));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // GET /api/items/:id
@@ -45,7 +46,7 @@ router.get('/:id', async (req, res) => {
       item.sale = saleRes.rows[0] || null;
     }
     res.json(item);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // POST /api/items
@@ -73,7 +74,7 @@ router.post('/', async (req, res) => {
     const created = (await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [id] })).rows[0];
     await log(user, 'created', 'item', id, name, { purchase_price, category, status });
     res.status(201).json(created);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // PATCH /api/items/:id
@@ -102,7 +103,7 @@ router.patch('/:id', async (req, res) => {
     const updated = (await db.execute({ sql: 'SELECT * FROM items WHERE id = ?', args: [req.params.id] })).rows[0];
     await log(user, 'updated', 'item', req.params.id, item.name, changes);
     res.json(updated);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 // DELETE /api/items/:id
@@ -115,7 +116,7 @@ router.delete('/:id', async (req, res) => {
     await db.execute({ sql: 'DELETE FROM items WHERE id = ?', args: [req.params.id] });
     await log(user, 'deleted', 'item', req.params.id, item.name, { purchase_price: item.purchase_price, status: item.status });
     res.json({ message: 'Item deleted' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: errMsg(err) }); }
 });
 
 module.exports = router;
